@@ -24,7 +24,7 @@ jobs:
       REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ vars.REGISTRY_PASSWORD }}
       IMAGE: $PROJ-$APP
-      TAG: $VERSION-$ENV
+      TAG: ${VERSION:1}-$ENV
     steps:
       - name: Build container image
         run: |
@@ -46,7 +46,7 @@ jobs:
       REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ vars.REGISTRY_PASSWORD }}
       IMAGE: $PROJ-$APP
-      TAG: $VERSION-$ENV
+      TAG: ${VERSION:1}-$ENV
     steps:
       - name: Login into registry
         run: docker login -u $REGISTRY_USERNAME -P $REGISTRY_PASSWORD
