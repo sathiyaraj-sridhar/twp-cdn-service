@@ -1,0 +1,56 @@
+name: CI Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  download:
+    runs-on: self-managed
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+  build:
+    needs: download
+    runs-on: self-hosted
+    env:
+      PROJ: ${{ vars.PROJ }}
+      APP: cdn
+      ENV: ${{ vars.ENV }}
+      VERSION: ${{ github.ref_name }}
+      REGISTRY: ${{ vars.REGISTRY }}
+      REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ vars.REGISTRY_PASSWORD }}
+      IMAGE: $PROJ-$APP
+      TAG: $VERSION-$ENV
+    steps:
+      - name: Build container image
+        run: |
+          DOCKER_BUILDKIT=1 docker build \
+            -t $IMAGE:$TAG \
+            --build-context app=. \
+            --target $ENV \
+            .
+
+  publish:
+    needs: build
+    runs-on: self-managed
+    env:
+      PROJ: ${{ vars.PROJ }}
+      APP: cdn
+      ENV: ${{ vars.ENV }}
+      VERSION: ${{ github.ref_name }}
+      REGISTRY: ${{ vars.REGISTRY }}
+      REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ vars.REGISTRY_PASSWORD }}
+      IMAGE: $PROJ-$APP
+      TAG: $VERSION-$ENV
+    steps:
+      - name: Login into registry
+        run: docker login -u $REGISTRY_USERNAME -P $REGISTRY_PASSWORD
+      - name: Tag container image
+        run: docker tag $IMAGE:$TAG $REGISTRY/$IMAGE:$TAG
+      - name: Publish container image to registry
+        run: docker push $REGISTRY/$IMAGE:$TAG
