@@ -8,15 +8,6 @@ on:
     tags:
       - 'v*'
 
-env:
-  PROJ: ${{ vars.PROJ }}
-  APP: cdn
-  ENV: ${{ vars.ENV }}
-  REGISTRY: ${{ vars.REGISTRY }}
-  REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
-  REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-  IMAGE: $PROJ-$APP
-
 jobs:
   download:
     runs-on: self-hosted
@@ -36,7 +27,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            name=$IMAGE
+            name=${{ vars.PROJ }}-${{ vars.APP }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -65,4 +56,4 @@ jobs:
           push: true
           tags: ${{ needs.configure.outputs.tags }}
           labels: ${{ needs.configure.outputs.labels }}
-          target: $ENV
+          target: ${{ vars.ENV }}
