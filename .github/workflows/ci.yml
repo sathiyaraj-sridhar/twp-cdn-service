@@ -4,9 +4,18 @@ on:
   push:
     branches:
       - dev
-      - release
+      - 'release/*'
     tags:
       - 'v*'
+
+env:
+  PROJ: ${{ vars.PROJ }}
+  APP: cdn
+  ENV: ${{ vars.ENV }}
+  REGISTRY: ${{ vars.REGISTRY }}
+  REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
+  REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+  IMAGE: $PROJ-$APP
 
 jobs:
   download:
@@ -15,58 +24,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-  build:
+  configure:
     needs: download
     runs-on: self-hosted
     environment: ${{ github.ref == 'refs/heads/dev' && 'dev' ||
-                    github.ref == 'refs/heads/release' && 'qa' ||
+                    startsWith(github.ref, 'refs/heads/release') && 'qa' ||
                     startsWith(github.ref, 'refs/tags/v') && 'prod' }}
-    env:
-      PROJ: ${{ vars.PROJ }}
-      APP: cdn
-      ENV: ${{ vars.ENV }}
-      REGISTRY: ${{ vars.REGISTRY }}
-      REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ vars.REGISTRY_PASSWORD }}
-      IMAGE: $PROJ-$APP
-      TAG: ${{ github.ref_type == 'tag' &&
-              github.ref_name != null &&
-              startsWith(github.ref_name, 'v') &&
-              replace(github.ref_name, 'v', '') ||
-              format('{0}-{1}', github.ref_name, github.run_number) }}
     steps:
-      - name: Build container image
-        run: |
-          DOCKER_BUILDKIT=1 docker build \
-            -t $IMAGE:$TAG \
-            --build-context app=. \
-            --target $ENV \
-            .
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            name=$IMAGE
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.REGISTRY }}
+          username: ${{ vars.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
 
-  publish:
-    needs: build
+  build-and-push:
+    needs: configure
     runs-on: self-hosted
     environment: ${{ github.ref == 'refs/heads/dev' && 'dev' ||
-                    github.ref == 'refs/heads/release' && 'qa' ||
+                    startsWith(github.ref, 'refs/heads/release') && 'qa' ||
                     startsWith(github.ref, 'refs/tags/v') && 'prod' }}
-    env:
-      PROJ: ${{ vars.PROJ }}
-      APP: cdn
-      ENV: ${{ vars.ENV }}
-      REGISTRY: ${{ vars.REGISTRY }}
-      REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ vars.REGISTRY_PASSWORD }}
-      IMAGE: $PROJ-$APP
-      TAG: ${{ github.ref_type == 'tag' &&
-              github.ref_name != null &&
-              startsWith(github.ref_name, 'v') &&
-              replace(github.ref_name, 'v', '') ||
-              format('{0}-{1}', github.ref_name, github.run_number) }}
-
     steps:
-      - name: Login into registry
-        run: docker login -u $REGISTRY_USERNAME -P $REGISTRY_PASSWORD
-      - name: Tag container image
-        run: docker tag $IMAGE:$TAG $REGISTRY/$IMAGE:$TAG
-      - name: Publish container image to registry
-        run: docker push $REGISTRY/$IMAGE:$TAG
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-contexts: app=.
+          push: true
+          tags: ${{ needs.configure.outputs.tags }}
+          labels: ${{ needs.configure.outputs.labels }}
+          target: $ENV
