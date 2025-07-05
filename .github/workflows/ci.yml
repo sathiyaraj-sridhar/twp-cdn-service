@@ -47,7 +47,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          build-contexts: app=.
+          build-contexts: |
+            src=./src
+          file: ./Dockerfile
           push: true
           tags: ${{ needs.prepare.outputs.tags }}
           labels: ${{ needs.prepare.outputs.labels }}
