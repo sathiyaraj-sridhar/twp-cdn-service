@@ -9,14 +9,7 @@ on:
       - 'v*'
 
 jobs:
-  download:
-    runs-on: self-hosted
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-  configure:
-    needs: download
+  prepare:
     runs-on: self-hosted
     environment: ${{ github.ref == 'refs/heads/dev' && 'dev' ||
                     startsWith(github.ref, 'refs/heads/release') && 'qa' ||
@@ -42,18 +35,20 @@ jobs:
       labels: ${{ steps.meta.outputs.labels }}
 
   build-and-push:
-    needs: configure
+    needs: prepare
     runs-on: self-hosted
     environment: ${{ github.ref == 'refs/heads/dev' && 'dev' ||
                     startsWith(github.ref, 'refs/heads/release') && 'qa' ||
                     startsWith(github.ref, 'refs/tags/v') && 'prod' }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           build-contexts: app=.
           push: true
-          tags: ${{ needs.configure.outputs.tags }}
-          labels: ${{ needs.configure.outputs.labels }}
+          tags: ${{ needs.prepare.outputs.tags }}
+          labels: ${{ needs.prepare.outputs.labels }}
           target: ${{ vars.ENV }}
